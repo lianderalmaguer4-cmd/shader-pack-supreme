@@ -1,8 +1,9 @@
 #version 150 core
 
 /*
- * SHADER PACK SUPREME - Water Fragment Shader
+ * SHADER PACK SUPREME v2.0 - Water Fragment Shader (FIXED)
  * Refracción, reflexión, profundidad
+ * BUG FIX: Agua más visible, refracción mejorada
  */
 
 uniform sampler2D texture;
@@ -30,7 +31,6 @@ layout(location = 1) out vec4 colortex1;
 // ====== WATER NORMAL ======
 
 vec3 getWaterNormal() {
-    // Normal perturbado para mayor realismo
     vec3 norm = normalize(normal);
     
     vec3 perturbation = vec3(
@@ -55,10 +55,10 @@ float fresnelEffect(vec3 N, vec3 V) {
 
 vec3 underwaterFog(vec3 color, float depth) {
     float fogDistance = depth * 2.0;
-    float fogFactor = 1.0 - exp(-fogDistance * 0.1);
+    float fogFactor = 1.0 - exp(-fogDistance * 0.05);
     
-    vec3 fogColor = vec3(0.2, 0.5, 0.7); // Azul agua
-    return mix(color, fogColor, fogFactor);
+    vec3 fogColor = vec3(0.3, 0.6, 0.8);
+    return mix(color, fogColor, fogFactor * 0.5);
 }
 
 // ====== CAUSTICS PATTERN ======
@@ -69,7 +69,7 @@ vec3 caustics(vec2 uv, float time) {
     float pattern = sin(uv1.x * 10.0) * cos(uv1.y * 10.0);
     pattern = smoothstep(0.0, 1.0, pattern * 0.5 + 0.5);
     
-    return vec3(pattern * 0.3);
+    return vec3(pattern * 0.2);
 }
 
 void main() {
@@ -77,30 +77,33 @@ void main() {
     vec3 N = getWaterNormal();
     vec3 V = normalize(-viewPos.xyz);
     
-    // Fresnel
     float fresnel = fresnelEffect(N, V);
     
-    // Refracción simulada
-    vec2 refractUV = texCoord + N.xz * waterRefractionStrength;
+    // Refracción mejorada
+    vec2 refractUV = texCoord + N.xz * waterRefractionStrength * 0.5;
     vec3 refractColor = texture(texture, refractUV).rgb;
+    refractColor = max(refractColor, vec3(0.2));
     refractColor = underwaterFog(refractColor, 0.5);
     
-    // Reflexión (simulated)
+    // Reflexión
     vec3 reflectDir = reflect(-V, N);
-    vec3 reflectColor = vec3(0.5, 0.7, 1.0); // Sky color
+    vec3 reflectColor = vec3(0.6, 0.75, 0.9);
     
     // Especularidad
-    float specular = pow(max(dot(reflectDir, vec3(0.0, 1.0, 0.0)), 0.0), 32.0) * waterSpecular;
+    float specular = pow(max(dot(reflectDir, vec3(0.0, 1.0, 0.0)), 0.0), 32.0) * waterSpecular * 0.5;
     
     // Caustics
     vec3 causticPattern = caustics(texCoord, 0.5);
     
-    // Mezclar colores
+    // Mezclar colores con mejor visibilidad
     vec3 finalColor = mix(refractColor, reflectColor, fresnel) * waterReflectionStrength;
     finalColor += specular * vec3(1.0);
-    finalColor += causticPattern * 0.2;
-    finalColor = mix(finalColor, waterColor, waterTransparency);
+    finalColor += causticPattern * 0.15;
+    finalColor = mix(finalColor, waterColor, max(waterTransparency, 0.3));
     
-    colortex0 = vec4(finalColor, 0.7);
+    // Asegurar visibilidad mínima
+    finalColor = max(finalColor, vec3(0.2));
+    
+    colortex0 = vec4(finalColor, 0.8);
     colortex1 = vec4(N * 0.5 + 0.5, 1.0);
 }

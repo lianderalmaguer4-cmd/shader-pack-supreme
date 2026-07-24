@@ -1,8 +1,9 @@
 #version 150 core
 
 /*
- * SHADER PACK SUPREME - Terrain Fragment Shader
+ * SHADER PACK SUPREME v2.0 - Terrain Fragment Shader (FIXED)
  * Physically Based Rendering (PBR) con shadows
+ * BUG FIX: Colores más visibles, mejor iluminación
  */
 
 // Uniforms
@@ -54,7 +55,7 @@ float shadowMapping() {
     }
     
     float shadow = 0.0;
-    float shadowSampleSize = 1.0 / 2048.0; // Resolución shadow map
+    float shadowSampleSize = 1.0 / 2048.0;
     
     for (int i = 0; i < SHADOW_SAMPLES; i++) {
         float angle = float(i) / float(SHADOW_SAMPLES) * 6.28318;
@@ -67,8 +68,6 @@ float shadowMapping() {
     }
     
     shadow /= float(SHADOW_SAMPLES);
-    
-    // Fade shadows basado en distancia
     float fade = smoothstep(shadowFadeStart, shadowDistance, length(viewPos));
     shadow = mix(shadow, 1.0, fade);
     
@@ -80,7 +79,6 @@ float shadowMapping() {
 vec3 normalMapping() {
     vec3 norm = normalize(normal);
     
-    // Simular normal map (en producción usarías un texture)
     vec3 normalMap = normalize(vec3(
         sin(texCoord.x * 10.0) * 0.1,
         sin(texCoord.y * 10.0) * 0.1,
@@ -91,7 +89,7 @@ vec3 normalMapping() {
     return norm;
 }
 
-// ====== PBR LIGHTING ======
+// ====== PBR LIGHTING (MEJORADO) ======
 
 vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
@@ -107,7 +105,7 @@ float DistributionGGX(vec3 N, vec3 H, float roughness) {
     float denom = (NdotH2 * (a2 - 1.0) + 1.0);
     denom = PI * denom * denom;
     
-    return nom / denom;
+    return nom / max(denom, 0.001);
 }
 
 float GeometrySchlickGGX(float NdotV, float roughness) {
@@ -117,7 +115,7 @@ float GeometrySchlickGGX(float NdotV, float roughness) {
     float nom = NdotV;
     float denom = NdotV * (1.0 - k) + k;
     
-    return nom / denom;
+    return nom / max(denom, 0.001);
 }
 
 float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
@@ -135,12 +133,11 @@ vec3 calculateLighting(vec3 baseColor, vec3 N, vec3 V) {
     vec3 lightDir = normalize(sunPosition);
     vec3 H = normalize(V + lightDir);
     
-    // Shadow
     float shadow = shadowMapping();
     
-    // PBR Calculation
+    // Luz más fuerte para mejor visibilidad
     float distance = 1.0;
-    float attenuation = 1.0 / (distance * distance);
+    float attenuation = 1.5 / (distance * distance);
     vec3 radiance = sunColor * attenuation * shadow;
     
     float NDF = DistributionGGX(N, H, roughness);
@@ -154,13 +151,13 @@ vec3 calculateLighting(vec3 baseColor, vec3 N, vec3 V) {
     float NdotL = max(dot(N, lightDir), 0.0);
     
     vec3 numerator = NDF * G * F;
-    float denominator = 4.0 * max(dot(N, V), 0.0) * NdotL;
+    float denominator = 4.0 * max(dot(N, V), 0.0) * max(NdotL, 0.001);
     vec3 specular = numerator / max(denominator, 0.001);
     
     vec3 Lo = (kD * baseColor / PI + specular) * radiance * NdotL;
     
-    // Ambient
-    vec3 ambient = baseColor * 0.03 * ambientOcclusion;
+    // Ambient mejorado para evitar oscuridad
+    vec3 ambient = baseColor * 0.15 * ambientOcclusion;
     
     return ambient + Lo;
 }
@@ -168,25 +165,27 @@ vec3 calculateLighting(vec3 baseColor, vec3 N, vec3 V) {
 // ====== MAIN ======
 
 void main() {
-    // Texture sampling
     vec4 texColor = texture(texture, texCoord) * color;
     
     if (texColor.a < 0.1) discard;
     
     vec3 baseColor = texColor.rgb;
     
-    // Normal mapping
+    // Asegurar que el color base no sea demasiado oscuro
+    baseColor = max(baseColor, vec3(0.1));
+    
     vec3 N = normalMapping();
     vec3 V = normalize(-viewPos.xyz);
     
-    // Lighting
     vec3 litColor = calculateLighting(baseColor, N, V);
     
-    // Lightmap influence
-    vec3 lmColor = texture(lightmap, lmCoord).rgb;
-    litColor = mix(litColor, baseColor * lmColor, 0.3);
+    // Lightmap influence mejorada
+    vec3 lmColor = max(texture(lightmap, lmCoord).rgb, vec3(0.3));
+    litColor = mix(litColor, baseColor * lmColor, 0.4);
     
-    // Output to G-buffers
+    // Asegurar visibilidad mínima
+    litColor = max(litColor, vec3(0.1));
+    
     colortex0 = vec4(litColor, 1.0);
     colortex1 = vec4(N * 0.5 + 0.5, roughness);
     colortex2 = vec4(baseColor, metallic);
