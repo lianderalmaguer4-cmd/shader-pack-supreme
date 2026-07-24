@@ -1,8 +1,7 @@
 #version 150 core
 
 /*
- * SHADER PACK SUPREME - Shadow Vertex Shader
- * Depth pass para shadow mapping
+ * SHADER PACK SUPREME v3.0 - Shadow Vertex Shader
  */
 
 uniform mat4 shadowModelMatrix;

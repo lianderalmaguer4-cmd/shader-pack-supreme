@@ -1,7 +1,7 @@
 #version 150 core
 
 /*
- * SHADER PACK SUPREME - Shadow Fragment Shader
+ * SHADER PACK SUPREME v3.0 - Shadow Fragment Shader
  */
 
 void main() {
